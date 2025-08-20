@@ -3,13 +3,57 @@
 import { useState } from 'react';
 import ItineraryDisplay from './components/ItineraryDisplay';
 
-export default function Home() {
-  const [showItinerary, setShowItinerary] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+interface ItineraryData {
+  tripTitle: string;
+  tripSummary: string;
+  days: Array<{
+    dayNumber: number;
+    dayTitle: string;
+    activities: Array<{
+      time: string;
+      description: string;
+    }>;
+  }>;
+}
 
-  const handleGenerateItinerary = () => {
-    if (searchQuery.trim()) {
-      setShowItinerary(true);
+export default function Home() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [itineraryData, setItineraryData] = useState<ItineraryData | null>(null);
+  const [error, setError] = useState('');
+
+  const handleGenerateItinerary = async () => {
+    if (!searchQuery.trim()) {
+      setError('Please enter a destination or travel idea');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/generate-itinerary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          destination: searchQuery,
+          prompt: `Generate a 3-day itinerary for ${searchQuery}`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate itinerary');
+      }
+
+      const data = await response.json();
+      setItineraryData(data);
+    } catch (err) {
+      setError('Failed to generate itinerary. Please try again.');
+      console.error('Error:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -33,30 +77,25 @@ export default function Home() {
             placeholder="e.g., Best spots in Paris on a budget"
             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          {error && (
+            <p className="text-red-500 text-sm">{error}</p>
+          )}
           <button
             onClick={handleGenerateItinerary}
-            className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
+            disabled={isLoading}
+            className={`px-8 py-3 bg-blue-600 text-white rounded-lg transition-colors duration-200 font-medium ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
           >
-            Generate Itinerary
+            {isLoading ? 'Generating...' : 'Generate Itinerary'}
           </button>
         </div>
       </div>
 
       <div className="w-full mt-12">
         <ItineraryDisplay
-          isVisible={showItinerary}
-          title="Your Paris Adventure"
-          summary="A budget-friendly exploration of the City of Light"
-          days={[
-            {
-              dayNumber: 1,
-              activities: [
-                'Morning: Visit the Eiffel Tower early to avoid crowds',
-                'Afternoon: Picnic lunch at Champ de Mars',
-                'Evening: Seine River walk and street food dinner'
-              ]
-            }
-          ]}
+          isVisible={!!itineraryData}
+          tripTitle={itineraryData?.tripTitle}
+          tripSummary={itineraryData?.tripSummary}
+          days={itineraryData?.days}
         />
       </div>
     </main>
